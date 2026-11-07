@@ -1,32 +1,59 @@
+
 "use client";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-// Client Component for just the search input — the results list stays a
-// Server Component (app/(dashboard)/browse/page.tsx) so the query hits
-// Supabase directly instead of round-tripping through the browser.
-export function SearchBox({ initialQuery, initialCategory }: { initialQuery?: string; initialCategory?: string }) {
+export function SearchBox({
+  initialQuery,
+  initialCategory,
+  categories,
+}: {
+  initialQuery?: string;
+  initialCategory?: string;
+  categories: string[];
+}) {
   const router = useRouter();
   const [q, setQ] = useState(initialQuery ?? "");
+  const [category, setCategory] = useState(initialCategory ?? "");
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+
     const params = new URLSearchParams();
+
     if (q.trim()) params.set("q", q.trim());
-    if (initialCategory) params.set("category", initialCategory);
-    router.push(`/browse${params.toString() ? `?${params.toString()}` : ""}`);
+    if (category) params.set("category", category);
+
+    router.push(
+      `/browse${params.toString() ? `?${params.toString()}` : ""}`
+    );
   }
 
   return (
     <form className="search-box" onSubmit={handleSubmit} role="search">
       <input
         type="search"
-        placeholder="Search by title..."
+        placeholder="Search by title, author, category, or description..."
         value={q}
         onChange={(e) => setQ(e.target.value)}
-        aria-label="Search resources by title"
+        aria-label="Search resources"
       />
+
+      <select
+        value={category}
+        onChange={(e) => setCategory(e.target.value)}
+        aria-label="Filter by category"
+      >
+        <option value="">All categories</option>
+
+        {categories.map((item) => (
+          <option key={item} value={item}>
+            {item}
+          </option>
+        ))}
+      </select>
+
       <button type="submit" className="btn btn-primary">
         Search
       </button>

@@ -12,19 +12,62 @@ export default async function BrowsePage({
 }) {
   const { supabase } = await requireDashboardUser();
 
+  const { data: categoryRows } = await supabase
+    .from("resource_availability")
+    .select("category")
+    .order("category");
+
+  const categories = [
+    ...new Set(
+      (categoryRows ?? [])
+        .map((item) => item.category)
+        .filter((category): category is string => Boolean(category))
+    ),
+  ];
+
   const q = searchParams.q?.trim();
   const category = searchParams.category?.trim();
 
-  let query = supabase.from("resource_availability").select("*").order("title").limit(50);
-  if (q) query = query.ilike("title", `%${q}%`);
-  if (category) query = query.eq("category", category);
+
+  let query = supabase
+    .from("resource_availability")
+    .select("*")
+    .order("title")
+    .limit(50);
+
+  // Search across title, author, category, and description
+  if (q) {
+    const escapedQ = q
+      .replace(/\\/g, "\\\\")
+      .replace(/"/g, '\\"');
+
+    const pattern = `"%${escapedQ}%"`;
+
+    query = query.or(
+      [
+        `title.ilike.${pattern}`,
+        `author.ilike.${pattern}`,
+        `category.ilike.${pattern}`,
+        `description.ilike.${pattern}`,
+      ].join(",")
+    );
+  }
+
+  if (category) {
+    query = query.eq("category", category);
+  }
 
   const { data: resources, error } = await query;
+
 
   return (
     <div>
       <h1>Browse Books</h1>
-      <SearchBox initialQuery={q} initialCategory={category} />
+      <SearchBox
+        initialQuery={q}
+        initialCategory={category}
+        categories={categories}
+      />
 
       {error && <p className="error">{error.message}</p>}
 
