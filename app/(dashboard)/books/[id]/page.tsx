@@ -12,7 +12,8 @@ import { BorrowButton } from "./BorrowButton";
 // available, Reserve when none are, the student's own reservation status
 // (pending queue position or ready-for-pickup) when they already have one,
 // and an unavailable message when the resource has no copies at all.
-export default async function BookDetailsPage({ params }: { params: { id: string } }) {
+export default async function BookDetailsPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { supabase, user } = await requireDashboardUser();
 
   const { data: resource } = await supabase.from("resources").select("*").eq("id", params.id).single();

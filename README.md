@@ -1,6 +1,6 @@
-# Campus Library Loan & Reservation System — Scaffold
+# Campus Library Loan & Reservation System
 
-Next.js 14 (App Router) + Supabase scaffold matching the product spec, the
+Next.js 16 (App Router) + Supabase app matching the product spec, the
 2026-10-29 backend decisions, the Student Dashboard pages, and the
 Circulation Desk / Admin — Users staff screens. All of it is wired to the
 real database — there's no mock data layer anywhere in `app/`.
@@ -12,7 +12,7 @@ db/schema.sql                      Tables, constraints (BR-01, dup-reservation, 
 db/migrations/0001_pg_cron_jobs.sql  Supabase pg_cron + pg_net schedules (reservation expiry, loan notifications)
 lib/supabase/{client,server}.ts    Browser / server Supabase clients
 lib/currentUser.ts                 requireDashboardUser() — cached per-request auth gate for Server Components
-middleware.ts                      Refreshes the auth session on every request
+proxy.ts                            Refreshes the auth session on every request
 lib/auth.ts                        requireUser / requireRole / withApiErrors helpers (API routes)
 lib/auth-client.ts                 signInWithGoogle() / signOut() for Client Components
 lib/eligibility.ts                 Shared Student Identity re-verification (sign-in + borrow time), fails closed
@@ -180,17 +180,55 @@ the mobile sidebar row.
 ## Setup
 
 ```bash
-npm install
-cp .env.example .env.local   # fill in Supabase project URL/keys
+npm ci
 ```
 
+Create `.env.local` from `.env.example` and fill in the values for your
+Supabase project. Never put `SUPABASE_SERVICE_ROLE_KEY` in a `NEXT_PUBLIC_*`
+variable or commit a real secret.
+
 In the Supabase dashboard:
-1. **Authentication → Providers → Google**: enable it and add your Google OAuth client ID/secret. Add `https://<your-domain>/auth/callback` (and `http://localhost:3000/auth/callback` for local dev) as a redirect URL.
-2. **SQL Editor**: run `db/schema.sql` on a fresh project, then `db/migrations/0001_pg_cron_jobs.sql` (after creating the two Vault secrets described at the top of that file).
+1. **Authentication → Providers → Google**: enable Google and configure the OAuth client ID/secret. In Google Cloud, the authorized redirect URI is the Supabase callback URL shown by the provider settings (usually `https://<project-ref>.supabase.co/auth/v1/callback`).
+2. **Authentication → URL Configuration**: set the Site URL to the deployed app URL and add `https://<app-domain>/auth/callback` as an allowed redirect URL. Add `http://localhost:3000/auth/callback` for local development.
+3. **SQL Editor**: on a fresh project, run `db/schema.sql`. After deploying the app and storing the project URL and `CRON_SECRET` in Supabase Vault, run `db/migrations/0001_pg_cron_jobs.sql`.
 
 ```bash
 npm run dev
 ```
+
+## Vercel deployment
+
+1. Import the GitHub repository into Vercel and use the Next.js defaults. Set
+   the project to use Node.js 22.
+2. Add environment variables in **Vercel → Project → Settings → Environment
+   Variables**. Required at runtime:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `SUPABASE_SERVICE_ROLE_KEY` (server-only; use a newly rotated key)
+   - `CRON_SECRET` (generate a unique random value)
+   - `LOAN_PERIOD_DAYS` and `MAX_ACTIVE_LOANS` (currently default to 14 and 5)
+3. Add `UNIVERSITY_EMAIL_DOMAIN` once the approved campus domain is confirmed.
+   Configure `STUDENT_IDENTITY_API_URL` and `STUDENT_IDENTITY_API_KEY` only
+   after the Student Identity team confirms its API contract. Keep these
+   secrets server-side.
+4. Deploy a Vercel Preview first. Add its `/auth/callback` URL to Supabase
+   Auth's allowed redirect URLs, then test Google sign-in. Update the allowed
+   URL when setting the final production domain.
+5. Store `project_url` and the same `cron_secret` in Supabase Vault, then run
+   `db/migrations/0001_pg_cron_jobs.sql` and check `cron.job_run_details` and
+   `net._http_response` after scheduled runs.
+6. To bootstrap administration, sign in once, then promote the intended
+   first admin's exact email in the Supabase SQL Editor:
+   `update public.users set role = 'admin' where email = '<admin-email>';`
+   Only a trusted project owner should do this.
+
+**Production gate:** the Student Identity endpoint is not available yet. The
+app deliberately fails closed, so users can sign in but borrowing remains
+blocked until that integration is implemented and configured. Email/push
+notifications also require the Notification Hub environment variables.
+Do not announce production readiness until these integrations, the campus
+email domain, database cron jobs, and the acceptance-test coverage are
+confirmed.
 
 ## What changed in the 2026-10-29 spec update (and where)
 
@@ -238,17 +276,16 @@ npm run dev
 
 ## Remaining open items
 
-- No screens yet — `app/page.tsx` only has a sign-in button.
-- Analytics event sending (FR-09, privacy-minimised) isn't wired into any
-  route yet; `lib/services/analytics.ts` is ready to call.
-- `lib/eligibility.ts`'s identifier (passed to Student Identity) is the
-  user's email until `identity_ref` is populated from a real response —
-  confirm this is what the Student Identity service expects once its
-  contract is known.
-- No automated tests yet. Spec requires at least one per AC-00…AC-10 (11+
-  total) before merging to production — `npm run test` runs Vitest, but no
-  test files exist.
+- The Student Identity endpoint and request/response contract are not
+  available. Borrowing intentionally fails closed until that is implemented.
+- Confirm the university email domain and set `UNIVERSITY_EMAIL_DOMAIN`.
+- Analytics event sending (FR-09, privacy-minimised) is not wired into a
+  route; `lib/services/analytics.ts` is ready to call.
+- The current tests cover Bangkok date conversion only. Add acceptance tests
+  for AC-00…AC-10 before calling the platform production-ready.
 
 ## Testing
 
-`npm run test` runs Vitest. No tests are included yet.
+Run `npm run lint`, `npm test`, and `npm run build` before deployment.
+Vitest currently includes unit tests for the Bangkok date conversion helper;
+it does not yet cover the full acceptance criteria.

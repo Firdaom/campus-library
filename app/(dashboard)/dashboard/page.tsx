@@ -25,8 +25,9 @@ export default async function DashboardPage() {
   const loans = (activeLoans ?? []) as any[];
   const activeReservations = (reservations ?? []) as any[];
 
-  const today = toBangkokDateString(new Date());
-  const in3Days = toBangkokDateString(new Date(Date.now() + 3 * 24 * 60 * 60 * 1000));
+  const now = new Date();
+  const today = toBangkokDateString(now);
+  const in3Days = toBangkokDateString(new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000));
 
   const overdue = loans.filter((l) => toBangkokDateString(new Date(l.due_at)) < today);
   const dueSoon = loans.filter((l) => {

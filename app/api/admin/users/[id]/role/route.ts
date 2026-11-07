@@ -6,7 +6,8 @@ const BodySchema = z.object({ role: z.enum(["student", "staff", "admin"]) });
 
 // FR-11 / AC-08: Admin-only role change. Also enforced by RLS
 // (users_admin_update_any), so this is defense in depth, not the only check.
-export const PATCH = withApiErrors(async (req: Request, { params }: { params: { id: string } }) => {
+export const PATCH = withApiErrors(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
+  const { id } = await params;
   const { supabase } = await requireRole(["admin"]);
 
   const parsed = BodySchema.safeParse(await req.json().catch(() => null));
@@ -17,7 +18,7 @@ export const PATCH = withApiErrors(async (req: Request, { params }: { params: { 
   const { data: user, error } = await supabase
     .from("users")
     .update({ role: parsed.data.role })
-    .eq("id", params.id)
+    .eq("id", id)
     .select("id, role")
     .single();
 

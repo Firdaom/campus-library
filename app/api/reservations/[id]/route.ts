@@ -6,13 +6,14 @@ import { createServiceClient } from "@/lib/supabase/server";
 // FR-07 / AC-05: a student can cancel their own pending or ready reservation.
 // Cancellation and FIFO queue promotion happen atomically in the database.
 export const DELETE = withApiErrors(
-  async (_req: Request, { params }: { params: { id: string } }) => {
+  async (_req: Request, { params }: { params: Promise<{ id: string }> }) => {
+    const { id } = await params;
     const { user } = await requireUser();
 
     const supabase = createServiceClient();
 
     const { error } = await supabase.rpc("cancel_reservation_atomic", {
-      p_reservation_id: params.id,
+      p_reservation_id: id,
       p_user_id: user.id,
     });
 

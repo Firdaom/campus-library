@@ -17,7 +17,7 @@ export class ApiError extends Error {
  * (see users_select_own_or_staff policy), so it works for every role.
  */
 export async function requireUser() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -46,10 +46,12 @@ export async function requireRole(roles: Role[]) {
 }
 
 /** Wraps a Route Handler body, converting ApiError into a JSON response. */
-export function withApiErrors(
-  handler: (req: Request, ctx: any) => Promise<Response>
+type ApiRouteContext = { params?: Promise<unknown> };
+
+export function withApiErrors<Context extends ApiRouteContext = ApiRouteContext>(
+  handler: (req: Request, ctx: Context) => Promise<Response>
 ) {
-  return async (req: Request, ctx: any) => {
+  return async (req: Request, ctx: Context) => {
     try {
       return await handler(req, ctx);
     } catch (err) {

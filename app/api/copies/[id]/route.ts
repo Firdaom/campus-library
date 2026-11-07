@@ -3,13 +3,14 @@ import { z } from "zod";
 import { requireUser, requireRole, withApiErrors } from "@/lib/auth";
 import { createServiceClient } from "@/lib/supabase/server";
 
-export const GET = withApiErrors(async (_req: Request, { params }: { params: { id: string } }) => {
+export const GET = withApiErrors(async (_req: Request, { params }: { params: Promise<{ id: string }> }) => {
+  const { id } = await params;
   const { supabase } = await requireUser();
 
   const { data: copy, error } = await supabase
     .from("copies")
     .select("id, resource_id, status")
-    .eq("id", params.id)
+    .eq("id", id)
     .single();
 
   if (error || !copy) return NextResponse.json({ error: "Not found." }, { status: 404 });
@@ -22,7 +23,8 @@ const UpdateCopySchema = z.object({
 });
 
 // Staff: safely release a copy back to circulation.
-export const PATCH = withApiErrors(async (req: Request, { params }: { params: { id: string } }) => {
+export const PATCH = withApiErrors(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
+  const { id } = await params;
   await requireRole(["staff", "admin"]);
 
   const parsed = UpdateCopySchema.safeParse(
@@ -44,7 +46,7 @@ export const PATCH = withApiErrors(async (req: Request, { params }: { params: { 
   const { data, error } = await serviceSupabase.rpc(
     "set_copy_available_atomic",
     {
-      p_copy_id: params.id,
+      p_copy_id: id,
     }
   );
 

@@ -13,11 +13,12 @@ import { CompletePickupButton } from "./CompletePickupButton";
 // available copies. Only the final actions (checkout/return) are Client
 // Components, since those are the only steps that need to call a mutating
 // API route.
-export default async function CirculationDeskPage({
-  searchParams,
-}: {
-  searchParams: { studentQuery?: string; studentId?: string; bookQuery?: string };
-}) {
+export default async function CirculationDeskPage(
+  props: {
+    searchParams: Promise<{ studentQuery?: string; studentId?: string; bookQuery?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { supabase } = await requireStaffUser();
 
   // Defensive length clamp, same spirit as GET /resources' 200-char limit —

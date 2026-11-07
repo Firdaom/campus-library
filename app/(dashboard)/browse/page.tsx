@@ -5,11 +5,12 @@ import { SearchBox } from "./SearchBox";
 // Browse Books: search and browse available books (FR-01, AC-01). Queries
 // the same resource_availability view the API's GET /resources uses,
 // directly from this Server Component rather than fetching our own route.
-export default async function BrowsePage({
-  searchParams,
-}: {
-  searchParams: { q?: string; category?: string };
-}) {
+export default async function BrowsePage(
+  props: {
+    searchParams: Promise<{ q?: string; category?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { supabase } = await requireDashboardUser();
 
   const { data: categoryRows } = await supabase
@@ -62,7 +63,19 @@ export default async function BrowsePage({
 
   return (
     <div>
-      <h1>Browse Books</h1>
+      <header className="page-heading catalog-heading">
+        <div>
+          <p className="eyebrow">THE CAMPUS COLLECTION</p>
+          <h1>Find your next read.</h1>
+          <p className="page-intro">A good book has a way of taking you somewhere. Start exploring.</p>
+        </div>
+        {resources && !error && (
+          <span className="catalog-count">
+            <strong>{resources.length}</strong>
+            {resources.length === 1 ? " title" : " titles"}
+          </span>
+        )}
+      </header>
       <SearchBox
         initialQuery={q}
         initialCategory={category}
@@ -73,7 +86,7 @@ export default async function BrowsePage({
 
       {category && (
         <p className="muted small" style={{ marginTop: "-0.75rem", marginBottom: "1rem" }}>
-          Filtered to category "{category}" —{" "}
+          Filtered to category &quot;{category}&quot; —{" "}
           <Link href="/browse" className="link">
             clear filter
           </Link>
@@ -84,19 +97,29 @@ export default async function BrowsePage({
         <div className="card-grid">
           {resources.map((r: any) => (
             <Link key={r.id} href={`/books/${r.id}`} className="book-card">
-              <h3>{r.title}</h3>
-              <p className="muted small" style={{ margin: 0 }}>
-                {r.category}
-                {r.author ? ` · ${r.author}` : ""}
-              </p>
-              <span className={`badge ${r.available_copies > 0 ? "badge-success" : "badge-muted"}`}>
-                {r.available_copies > 0 ? `${r.available_copies} available` : "All copies on loan"}
+              <span className="book-cover" aria-hidden="true">
+                <span className="book-cover-lines" />
+                <span className="book-cover-mark">CL</span>
+              </span>
+              <span className="book-card-content">
+                <span className="book-category">{r.category}</span>
+                <strong className="book-title">{r.title}</strong>
+                <span className="book-author">{r.author || "Campus collection"}</span>
+                <span className={`badge ${r.available_copies > 0 ? "badge-success" : "badge-muted"}`}>
+                  <span className="availability-dot" aria-hidden="true" />
+                  {r.available_copies > 0 ? `${r.available_copies} available` : "Currently on loan"}
+                </span>
               </span>
             </Link>
           ))}
         </div>
       ) : (
-        <p className="muted">No resources match your search.</p>
+        <section className="empty-state">
+          <span className="empty-state-mark" aria-hidden="true">⌕</span>
+          <h2>No titles found</h2>
+          <p>Try a different search, or clear your filters to explore the full collection.</p>
+          <Link href="/browse" className="btn btn-secondary">Show all books</Link>
+        </section>
       )}
     </div>
   );

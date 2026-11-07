@@ -55,7 +55,8 @@ const ERROR_RESPONSES: Record<string, { status: number; message: string }> = {
 };
 
 export const POST = withApiErrors(
-  async (req: Request, { params }: { params: { id: string } }) => {
+  async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
+    const { id } = await params;
     // Only staff and admins can complete reservation checkout.
     await requireRole(["staff", "admin"]);
 
@@ -82,7 +83,7 @@ export const POST = withApiErrors(
     const { data, error } = await serviceSupabase.rpc(
       "checkout_reservation_atomic",
       {
-        p_reservation_id: params.id,
+        p_reservation_id: id,
         p_user_id: user_id,
         p_due_at: dueAt,
         p_max_active_loans: MAX_ACTIVE_LOANS,

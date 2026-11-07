@@ -4,13 +4,14 @@ import { requireRole, withApiErrors } from "@/lib/auth";
 import { createServiceClient } from "@/lib/supabase/server";
 
 export const PATCH = withApiErrors(
-  async (_req: Request, { params }: { params: { id: string } }) => {
+  async (_req: Request, { params }: { params: Promise<{ id: string }> }) => {
+    const { id } = await params;
     await requireRole(["staff", "admin"]);
 
     const supabase = createServiceClient();
 
     const { data, error } = await supabase.rpc("return_loan_atomic", {
-      p_loan_id: params.id,
+      p_loan_id: id,
     });
 
     if (error) {

@@ -92,7 +92,7 @@ export async function POST(req: Request) {
     // received the event twice in that narrow race, which is an accepted
     // tradeoff of at-least-once delivery; the history table still only
     // ever shows one row, so no THIRD run would ever re-send it.
-    if (historyError && (historyError as any).code !== "23505") {
+    if (historyError && historyError.code !== "23505") {
       console.error("[loan-notifications] failed to record history:", historyError.message);
     }
 

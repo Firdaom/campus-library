@@ -14,7 +14,7 @@ import { createClient } from "@/lib/supabase/server";
  * the time a page renders the redirect (if any) has already happened.
  */
 export const requireDashboardUser = cache(async () => {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

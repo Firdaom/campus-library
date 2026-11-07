@@ -63,3 +63,5 @@ export interface Reservation {
   expires_at: string | null;
   held_copy_id: string | null;
 }
+
+export type RecommendationResource = Pick<Resource, "id" | "title" | "category">;

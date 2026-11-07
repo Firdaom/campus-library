@@ -6,7 +6,7 @@ import { NextResponse, type NextRequest } from "next/server";
  * and Server Components always see a valid session (NFR-02: all write
  * operations must be authenticated).
  */
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request: { headers: request.headers } });
 
   const supabase = createServerClient(

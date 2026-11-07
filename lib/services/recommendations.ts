@@ -1,4 +1,5 @@
 import { SupabaseClient } from "@supabase/supabase-js";
+import type { RecommendationResource } from "@/types/db";
 
 /**
  * FR-10 / AC-07: AI recommendations with a deterministic fallback to
@@ -8,7 +9,7 @@ export async function getRecommendations(
   supabase: SupabaseClient,
   resourceId: string,
   category: string
-) {
+): Promise<{ source: "ai" | "popular_in_category"; resources: RecommendationResource[] }> {
   const aiUrl = process.env.AI_RECOMMENDATION_URL;
 
   if (aiUrl) {
@@ -21,8 +22,8 @@ export async function getRecommendations(
       });
       clearTimeout(timeout);
       if (res.ok) {
-        const data = await res.json();
-        return { source: "ai" as const, resources: data.resources };
+        const data = (await res.json()) as { resources: RecommendationResource[] };
+        return { source: "ai", resources: data.resources };
       }
     } catch {
       // fall through to deterministic fallback below
