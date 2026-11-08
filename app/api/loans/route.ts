@@ -92,12 +92,33 @@ export const POST = withApiErrors(async (req: Request) => {
     );
   }
 
-  // 4. Verify eligibility at the moment of borrowing.
-  // Do not bypass this check if Student Identity is unavailable.
+  // 4. Derive Student ID from the verified university email.
+  const emailMatch = borrower.email.match(
+    /^(\d{10})@lamduan\.mfu\.ac\.th$/i
+  );
+
+  const studentId = emailMatch?.[1];
+
+  if (!studentId) {
+    return NextResponse.json(
+      { error: "Cannot determine a valid Student ID from the university email." },
+      { status: 403 }
+    );
+  }
+
+  // Fail closed if the stored identity reference conflicts with the email.
+  if (borrower.identity_ref && borrower.identity_ref !== studentId) {
+    return NextResponse.json(
+      { error: "Student ID does not match the stored identity reference." },
+      { status: 403 }
+    );
+  }
+
+  // Verify eligibility again at the moment of borrowing.
   const eligibility = await verifyAndStoreEligibility(
     supabase,
     borrowerId,
-    borrower.identity_ref ?? borrower.email
+    studentId
   );
 
   if (!eligibility.eligible) {
@@ -110,6 +131,7 @@ export const POST = withApiErrors(async (req: Request) => {
       { status: 403 }
     );
   }
+
 
   // 5. Calculate the due date.
   const dueAt = new Date(

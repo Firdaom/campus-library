@@ -1,59 +1,92 @@
-/**
- * Student Identity — external, non-human actor (spec section 3 / 9).
- * Confirms a student exists and is eligible to borrow.
- *
- * FR-08 / section 13: if this service is down or times out, the caller must
- * fail CLOSED (treat as not eligible / block borrowing), never silently
- * skip the check.
- *
- * STILL TO CONFIRM (per spec update 2026-10-29): the real endpoint,
- * request/response shape, and auth method used by the Student Identity
- * service. This module is the single place that talks to it — swap the
- * fetch call below once the contract is confirmed; callers only see
- * EligibilityResult.
- */
+
 export interface EligibilityResult {
   eligible: boolean;
   identity_ref?: string;
   reason?: string;
 }
 
-const TIMEOUT_MS = 5000;
+interface StudentIdentityResponse {
+  studentId: string;
+  claims: {
+    verified: boolean;
+    name?: {
+      first: string;
+      last: string;
+    };
+    profileComplete?: boolean;
+    missingFields?: string[];
+    skills?: string[];
+  };
+  issuedAt: string;
+}
 
-/**
- * @param identifier The value used to look the student up with the
- *   Student Identity service — currently their university email (from
- *   Google OAuth). Swap for a student-ID field once the real contract is
- *   confirmed, if the service expects something else.
- */
-export async function checkStudentEligibility(identifier: string): Promise<EligibilityResult> {
-  const url = process.env.STUDENT_IDENTITY_API_URL;
-  if (!url) {
-    // No contract confirmed yet (spec section 16, Risks / 2026-10-29 update).
-    // Throwing here enforces fail-closed behavior rather than silently
-    // treating everyone as eligible. Replace with the real integration once
-    // the Student Identity pod publishes their API, or point
-    // STUDENT_IDENTITY_API_URL at a mock for local/dev.
-    throw new Error("Student Identity service is not configured.");
+const TIMEOUT_MS = 60_000;
+
+export async function checkStudentEligibility(
+  studentId: string
+): Promise<EligibilityResult> {
+  const baseUrl = process.env.STUDENT_IDENTITY_API_URL;
+  const apiKey = process.env.STUDENT_IDENTITY_API_KEY;
+
+  if (!baseUrl || !apiKey) {
+    throw new Error("Student Identity API is not configured.");
+  }
+
+  if (!/^\d{10}$/.test(studentId)) {
+    return {
+      eligible: false,
+      reason: "Invalid student ID.",
+    };
   }
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
   try {
-    const res = await fetch(`${url}/eligibility/${encodeURIComponent(identifier)}`, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${process.env.STUDENT_IDENTITY_API_KEY}`,
-        Accept: "application/json",
-      },
-      signal: controller.signal,
-      // This is a server-only module (see lib/eligibility.ts callers, all of
-      // which run in Route Handlers) — never import this from a Client
-      // Component, or STUDENT_IDENTITY_API_KEY would ship to the browser.
-    });
-    if (!res.ok) return { eligible: false, reason: `Student Identity returned ${res.status}` };
-    return (await res.json()) as EligibilityResult;
+    const res = await fetch(
+      `${baseUrl.replace(/\/+$/, "")}/students/${encodeURIComponent(studentId)}/claims`,
+      {
+        method: "GET",
+        headers: {
+          "X-API-Key": apiKey,
+          Accept: "application/json",
+        },
+        signal: controller.signal,
+        cache: "no-store",
+      }
+    );
+
+    if (!res.ok) {
+      const reasons: Record<number, string> = {
+        401: "Student Identity API authentication failed.",
+        403: "Student has not consented to Student Identity.",
+        404: "Student ID was not found.",
+      };
+
+      return {
+        eligible: false,
+        reason:
+          reasons[res.status] ??
+          `Student Identity returned HTTP ${res.status}.`,
+      };
+    }
+
+    const data = (await res.json()) as StudentIdentityResponse;
+
+    if (
+      data.studentId !== studentId ||
+      typeof data.claims?.verified !== "boolean"
+    ) {
+      throw new Error("Invalid Student Identity API response.");
+    }
+
+    return {
+      eligible: data.claims.verified,
+      identity_ref: data.studentId,
+      reason: data.claims.verified
+        ? undefined
+        : "Student Identity verification failed.",
+    };
   } finally {
     clearTimeout(timeout);
   }
