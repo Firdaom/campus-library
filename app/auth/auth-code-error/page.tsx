@@ -1,17 +1,22 @@
+
 import Link from "next/link";
 
-// Shown when the Google OAuth callback fails (bad/expired code, or the
-// account's email domain doesn't match UNIVERSITY_EMAIL_DOMAIN).
+// Shown when the Google OAuth callback fails.
 export default async function AuthCodeErrorPage(
   props: {
     searchParams: Promise<{ reason?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
-  const message =
-    searchParams.reason === "domain"
-      ? "Please sign in with your university Google account."
-      : "Sign-in failed. Please try again.";
+
+  let message = "Sign-in failed. Please try again.";
+
+  if (searchParams.reason === "domain") {
+    message = "Please sign in with your university Google account.";
+  } else if (searchParams.reason === "portal-mismatch") {
+    message =
+      "Your account does not have access to the selected portal. Please choose the correct portal or contact a library administrator.";
+  }
 
   return (
     <main style={{ fontFamily: "system-ui", padding: "2rem" }}>

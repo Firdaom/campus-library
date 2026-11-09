@@ -1358,3 +1358,53 @@ h2 {
     transition-duration: 0.01ms !important;
   }
 }
+
+
+
+/* ---- Portal selection ---- */
+.portal-options {
+  display: grid;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.portal-option {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  width: 100%;
+  padding: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+
+.portal-option:hover {
+  border-color: var(--color-primary);
+}
+
+.portal-option.selected {
+  border: 2px solid var(--color-primary);
+  padding: calc(1rem - 1px);
+  background: color-mix(in srgb, var(--color-primary) 7%, var(--color-bg));
+}
+
+.portal-option-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.portal-option-description {
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.portal-option:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+}

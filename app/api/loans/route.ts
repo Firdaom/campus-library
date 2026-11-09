@@ -78,10 +78,11 @@ export const POST = withApiErrors(async (req: Request) => {
     throw new ApiError(403, "Role is not allowed to borrow.");
   }
 
+  
   // 3. Check the borrower's account.
   const { data: borrower, error: borrowerError } = await supabase
     .from("users")
-    .select("email, identity_ref, status")
+    .select("email, identity_ref, status, role")
     .eq("id", borrowerId)
     .single();
 
@@ -92,12 +93,39 @@ export const POST = withApiErrors(async (req: Request) => {
     );
   }
 
-  // 4. Derive Student ID from the verified university email.
-  const emailMatch = borrower.email.match(
-    /^(\d{10})@lamduan\.mfu\.ac\.th$/i
-  );
+  // Only student accounts may be borrowers.
+  // Staff/Admin can perform checkout, but cannot borrow as students.
+  if (borrower.role !== "student") {
+    return NextResponse.json(
+      { error: "Only student accounts are allowed to borrow." },
+      { status: 403 }
+    );
+  }
 
-  const studentId = emailMatch?.[1];
+  // 4. Verify the borrower's university email and Student ID.
+  const allowedDomain = (
+    process.env.UNIVERSITY_EMAIL_DOMAIN ??
+    "lamduan.mfu.ac.th"
+  ).toLowerCase();
+
+  const email = (borrower.email ?? "").trim().toLowerCase();
+  const emailParts = email.split("@");
+
+  const isUniversityEmail =
+    emailParts.length === 2 &&
+    emailParts[1] === allowedDomain;
+
+  if (!isUniversityEmail) {
+    return NextResponse.json(
+      { error: "Only students with a valid university email can borrow." },
+      { status: 403 }
+    );
+  }
+
+  // Student ID must be exactly 10 digits.
+  const studentId = /^\d{10}$/.test(emailParts[0])
+    ? emailParts[0]
+    : "";
 
   if (!studentId) {
     return NextResponse.json(
@@ -131,6 +159,7 @@ export const POST = withApiErrors(async (req: Request) => {
       { status: 403 }
     );
   }
+
 
 
   // 5. Calculate the due date.
