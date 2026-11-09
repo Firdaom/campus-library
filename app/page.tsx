@@ -1,7 +1,6 @@
-
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { PortalSelector } from "./PortalSelector";
+import { SignInButton } from "./SignInButton";
 
 export default async function HomePage() {
   const supabase = await createClient();
@@ -20,7 +19,9 @@ export default async function HomePage() {
       redirect("/circulation");
     }
 
-    redirect("/dashboard");
+    if (profile?.role === "student") {
+      redirect("/dashboard");
+    }
   }
 
   return (
@@ -52,9 +53,9 @@ export default async function HomePage() {
         <div className="auth-card">
           <p className="eyebrow">WELCOME BACK</p>
           <h2>Make yourself at home.</h2>
-          <p>Select your portal to continue.</p>
+          <p>Sign in with your Google account to continue.</p>
 
-          <PortalSelector />
+          <SignInButton />
 
           <div className="auth-divider">
             <span>YOUR LIBRARY, IN ONE PLACE</span>

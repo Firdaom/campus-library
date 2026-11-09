@@ -3,13 +3,11 @@
 
 import { signInWithGoogle } from "@/lib/auth-client";
 
-type Portal = "student" | "staff";
-
-export function SignInButton({ portal }: { portal: Portal }) {
+export function SignInButton() {
   return (
     <button
       className="btn btn-primary"
-      onClick={() => signInWithGoogle(portal)}
+      onClick={() => signInWithGoogle()}
     >
       Continue with Google
     </button>

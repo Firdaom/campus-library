@@ -7,14 +7,6 @@ export async function GET(req: Request) {
   const { searchParams, origin } = new URL(req.url);
 
   const code = searchParams.get("code");
-  const portal = searchParams.get("portal");
-
-  // Accept only the two supported portal values.
-  if (portal !== "student" && portal !== "staff") {
-    return NextResponse.redirect(
-      `${origin}/auth/auth-code-error`
-    );
-  }
 
   if (!code) {
     return NextResponse.redirect(
@@ -35,8 +27,7 @@ export async function GET(req: Request) {
 
   const email = data.user.email ?? "";
 
-  // Load the actual role from the database.
-  // Portal selection must never grant or change a user's role.
+  // Read the actual role from the database.
   const { data: profile, error: profileError } = await supabase
     .from("users")
     .select("role")
@@ -55,30 +46,12 @@ export async function GET(req: Request) {
     );
   }
 
-  const isStudent = profile.role === "student";
-  const isStaffOrAdmin =
-    profile.role === "staff" || profile.role === "admin";
-
-  // Reject accounts attempting to enter the wrong portal.
-  if (
-    (portal === "student" && !isStudent) ||
-    (portal === "staff" && !isStaffOrAdmin)
-  ) {
-    await supabase.auth.signOut();
-
-    return NextResponse.redirect(
-      `${origin}/auth/auth-code-error?reason=portal-mismatch`
-    );
-  }
-
   // Student accounts must use the university email domain.
-  // Staff and Admin accounts may use personal email addresses.
-  if (isStudent) {
-    const allowedDomain =
-      (
-        process.env.UNIVERSITY_EMAIL_DOMAIN ??
-        "lamduan.mfu.ac.th"
-      ).toLowerCase();
+  if (profile.role === "student") {
+    const allowedDomain = (
+      process.env.UNIVERSITY_EMAIL_DOMAIN ??
+      "lamduan.mfu.ac.th"
+    ).toLowerCase();
 
     const emailParts = email.toLowerCase().split("@");
 
@@ -99,8 +72,6 @@ export async function GET(req: Request) {
       ? emailParts[0]
       : "";
 
-    // Invalid ID format or unavailable API fails closed.
-    // The borrowing endpoint performs its own eligibility check.
     await verifyAndStoreEligibility(
       supabase,
       data.user.id,
@@ -110,7 +81,6 @@ export async function GET(req: Request) {
     return NextResponse.redirect(`${origin}/dashboard`);
   }
 
-  // Both Staff and Admin enter the Staff Portal.
-  // Student Identity verification does not apply to them.
+  // Staff and Admin automatically enter the Staff Portal.
   return NextResponse.redirect(`${origin}/circulation`);
 }
