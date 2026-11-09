@@ -77,6 +77,21 @@ BEGIN
     RAISE EXCEPTION 'STUDENT_INELIGIBLE'
       USING ERRCODE = 'P0001';
   END IF;
+  
+    -- Prevent a student from having multiple active loans
+  -- for the same resource, even when the physical copies differ.
+  IF EXISTS (
+    SELECT 1
+    FROM public.loans l
+    JOIN public.copies c ON c.id = l.copy_id
+    WHERE l.user_id = p_user_id
+      AND c.resource_id = v_resource_id
+      AND l.returned_at IS NULL
+      AND l.status = 'active'::public.loan_status
+  ) THEN
+    RAISE EXCEPTION 'DUPLICATE_RESOURCE_LOAN'
+      USING ERRCODE = 'P0001';
+  END IF;
 
   -- Lock reservation and re-check its current state.
   SELECT
@@ -177,12 +192,12 @@ BEGIN
   INTO v_loan_id, v_due_at;
 
   -- Mark the copy as loaned.
-  UPDATE public.copies
+   UPDATE public.copies AS c
   SET
     status = 'loaned'::public.copy_status,
     updated_at = now()
-  WHERE id = v_copy_id
-    AND status = 'held'::public.copy_status;
+  WHERE c.id = v_copy_id
+    AND c.status = 'held'::public.copy_status;
 
   IF NOT FOUND THEN
     RAISE EXCEPTION 'COPY_NOT_HELD'
@@ -190,10 +205,10 @@ BEGIN
   END IF;
 
   -- Complete the reservation.
-  UPDATE public.reservations
+   UPDATE public.reservations AS r
   SET status = 'fulfilled'::public.reservation_status
-  WHERE id = p_reservation_id
-    AND status = 'ready'::public.reservation_status;
+  WHERE r.id = p_reservation_id
+    AND r.status = 'ready'::public.reservation_status;
 
   IF NOT FOUND THEN
     RAISE EXCEPTION 'RESERVATION_NOT_READY'

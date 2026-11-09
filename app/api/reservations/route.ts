@@ -54,6 +54,15 @@ export const POST = withApiErrors(async (req: Request) => {
       );
     }
 
+    if (error.message.includes("DUPLICATE_RESOURCE_LOAN")) {
+      return NextResponse.json(
+        {
+          error: "You already have an active loan for this book.",
+        },
+        { status: 409 }
+      );
+    }
+
     if (
       error.message.includes("duplicate key") ||
       error.code === "23505"

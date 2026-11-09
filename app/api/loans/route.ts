@@ -78,7 +78,7 @@ export const POST = withApiErrors(async (req: Request) => {
     throw new ApiError(403, "Role is not allowed to borrow.");
   }
 
-  
+
   // 3. Check the borrower's account.
   const { data: borrower, error: borrowerError } = await supabase
     .from("users")
@@ -208,6 +208,13 @@ export const POST = withApiErrors(async (req: Request) => {
     ) {
       return NextResponse.json(
         { error: "No available copy. Please try again." },
+        { status: 409 }
+      );
+    }
+
+    if (message.includes("DUPLICATE_RESOURCE_LOAN")) {
+      return NextResponse.json(
+        { error: "You already have an active loan for this book." },
         { status: 409 }
       );
     }

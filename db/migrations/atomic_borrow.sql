@@ -93,6 +93,21 @@ BEGIN
       USING ERRCODE = 'P0001';
   END IF;
 
+    -- Prevent a student from having multiple active loans
+  -- for the same resource, even when the physical copies differ.
+  IF EXISTS (
+    SELECT 1
+    FROM public.loans l
+    JOIN public.copies c ON c.id = l.copy_id
+    WHERE l.user_id = p_user_id
+      AND c.resource_id = v_resource_id
+      AND l.returned_at IS NULL
+      AND l.status = 'active'::public.loan_status
+  ) THEN
+    RAISE EXCEPTION 'DUPLICATE_RESOURCE_LOAN'
+      USING ERRCODE = 'P0001';
+  END IF;
+
   -- 5. Lock and validate one available copy.
   IF p_copy_id IS NOT NULL THEN
 

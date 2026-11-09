@@ -3,7 +3,7 @@ import { requireStaffUser } from "@/lib/currentUser";
 import { toBangkokDateString } from "@/lib/dates";
 import { CheckoutButton } from "./CheckoutButton";
 import { ReturnButton } from "./ReturnButton";
-import { CompletePickupButton } from "./CompletePickupButton";
+
 
 // Circulation Desk: check out (create loan), check in (return), and
 // complete pickup for a student's ready reservation (FR-03, FR-04, FR-05,
@@ -53,17 +53,6 @@ export default async function CirculationDeskPage(
       .slice(0, 10);
   }
 
-  // FR-05: reservations held and ready for this student to collect.
-  let readyReservations: { id: string; resources: { title: string } | null; expires_at: string | null }[] = [];
-  if (selectedStudent) {
-    const { data } = await supabase
-      .from("reservations")
-      .select("id, expires_at, resources(title)")
-      .eq("user_id", selectedStudent.id)
-      .eq("status", "ready")
-      .order("expires_at", { ascending: true });
-    readyReservations = (data ?? []) as any;
-  }
 
   let bookResults: { id: string; title: string; author: string | null; category: string; copies: { id: string; status: string }[] }[] = [];
   if (selectedStudent && bookQuery) {
@@ -131,9 +120,8 @@ export default async function CirculationDeskPage(
                 <span className="muted small"> · {selectedStudent.email}</span>
                 {selectedStudent.eligibility_status !== "eligible" && (
                   <span
-                    className={`badge ${
-                      selectedStudent.eligibility_status === "ineligible" ? "badge-danger" : "badge-muted"
-                    }`}
+                    className={`badge ${selectedStudent.eligibility_status === "ineligible" ? "badge-danger" : "badge-muted"
+                      }`}
                     style={{ marginLeft: "0.5rem" }}
                   >
                     {selectedStudent.eligibility_status === "ineligible" ? "Not eligible" : "Not yet verified"}
@@ -154,24 +142,6 @@ export default async function CirculationDeskPage(
               </p>
             )}
 
-            {readyReservations.length > 0 && (
-              <div style={{ marginTop: "0.9rem" }}>
-                <h3 style={{ margin: "0 0 0.4rem" }}>Ready for pickup</h3>
-                <ul className="list">
-                  {readyReservations.map((r) => (
-                    <li key={r.id} className="reservation-row">
-                      <div>
-                        <strong>{r.resources?.title ?? "Resource"}</strong>
-                        <div className="muted small">
-                          Hold expires {r.expires_at ? new Date(r.expires_at).toLocaleString() : "soon"}
-                        </div>
-                      </div>
-                      <CompletePickupButton reservationId={r.id} studentId={selectedStudent.id} />
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
 
             <form action="/circulation" method="GET" className="search-box" style={{ marginTop: "0.9rem" }}>
               <input type="hidden" name="studentId" value={selectedStudent.id} />

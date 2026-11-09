@@ -54,6 +54,20 @@ BEGIN
     RAISE EXCEPTION 'USER_NOT_ACTIVE'
       USING ERRCODE = 'P0001';
   END IF;
+    -- Prevent a student from reserving a resource
+  -- that they already have an active loan for.
+  IF EXISTS (
+    SELECT 1
+    FROM public.loans l
+    JOIN public.copies c ON c.id = l.copy_id
+    WHERE l.user_id = p_user_id
+      AND c.resource_id = p_resource_id
+      AND l.returned_at IS NULL
+      AND l.status = 'active'::public.loan_status
+  ) THEN
+    RAISE EXCEPTION 'DUPLICATE_RESOURCE_LOAN'
+      USING ERRCODE = 'P0001';
+  END IF;
 
   -- Intentionally do NOT check eligibility_status here.
   -- Eligibility is required at checkout/borrow.

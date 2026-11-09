@@ -14,11 +14,12 @@ export default async function StaffLayout({
   const { supabase, user, profile } = await requireStaffUser();
 
   const navItems = [
-    { href: "/circulation", label: "Circulation Desk" },
-    ...(profile.role === "admin"
-      ? [{ href: "/admin/users", label: "Admin — Users" }]
-      : []),
-  ];
+  { href: "/circulation", label: "Circulation Desk" },
+  { href: "/staff/reservations", label: "Reservation Management" },
+  ...(profile.role === "admin"
+    ? [{ href: "/admin/users", label: "Admin — Users" }]
+    : []),
+];
 
   return (
     <div className="app-shell">
