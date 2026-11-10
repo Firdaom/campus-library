@@ -14,21 +14,35 @@ export default async function ReservationsPage() {
 
   // Queue position for 'pending' reservations: how many OTHER pending
   // reservations for the same resource were created earlier (FIFO, same
-  // ordering BR-05/FR-12 use when a copy frees up). One query per pending
-  // row is fine at this scale — replace with a window function or a view
-  // if the catalog/queue sizes grow.
-  const rows = await Promise.all(
-    (reservations ?? []).map(async (r: any) => {
-      if (r.status !== "pending") return { ...r, position: null as number | null };
-      const { count } = await supabase
-        .from("reservations")
-        .select("id", { count: "exact", head: true })
-        .eq("resource_id", r.resource_id)
-        .eq("status", "pending")
-        .lt("created_at", r.created_at);
-      return { ...r, position: (count ?? 0) + 1 };
-    })
-  );
+  // ordering BR-05/FR-12 use when a copy frees up). Previously one COUNT
+  // query per pending row (N+1); now a single query for all the resources
+  // involved, counted in memory with the same "created_at < mine" rule.
+  const pendingRows = (reservations ?? []).filter((r: any) => r.status === "pending");
+  const resourceIds = [...new Set(pendingRows.map((r: any) => r.resource_id as string))];
+
+  const queueByResource = new Map<string, string[]>();
+  if (resourceIds.length > 0) {
+    const { data: queue } = await supabase
+      .from("reservations")
+      .select("resource_id, created_at")
+      .in("resource_id", resourceIds)
+      .eq("status", "pending");
+
+    for (const q of queue ?? []) {
+      const list = queueByResource.get(q.resource_id);
+      if (list) list.push(q.created_at);
+      else queueByResource.set(q.resource_id, [q.created_at]);
+    }
+  }
+
+  const rows = (reservations ?? []).map((r: any) => {
+    if (r.status !== "pending") return { ...r, position: null as number | null };
+    const mine = timestampKey(r.created_at);
+    const earlier = (queueByResource.get(r.resource_id) ?? []).filter(
+      (createdAt) => timestampKey(createdAt) < mine
+    ).length;
+    return { ...r, position: earlier + 1 };
+  });
 
   return (
     <div>
@@ -79,4 +93,16 @@ function statusBadgeClass(status: string) {
     default:
       return "badge-default";
   }
+}
+
+/**
+ * Orders Postgres timestamptz strings exactly (microsecond precision), the
+ * same way the old `.lt("created_at", ...)` filter did in the database.
+ * `Date` alone would truncate to milliseconds and could mis-order two rows
+ * created within the same millisecond.
+ */
+function timestampKey(value: string): number {
+  const micros = /\.(\d+)/.exec(value)?.[1] ?? "";
+  const sub = Number(micros.padEnd(6, "0").slice(0, 6)) % 1000;
+  return Date.parse(value) * 1000 + sub;
 }

@@ -33,18 +33,48 @@ export async function POST(req: Request) {
   const today = todayBangkok();
   const tomorrow = tomorrowBangkok();
 
-  const { data: activeLoans, error } = await supabase
-    .from("loans")
-    .select("id, user_id, due_at")
-    .is("returned_at", null);
+  // Only loans that can possibly need an event: due on/before tomorrow's
+  // Bangkok calendar day (that covers overdue, due today and due tomorrow).
+  // Anything due later is skipped by the loop below anyway, so filter it out
+  // in the database instead of loading every active loan.
+  // Bangkok is a fixed UTC+7, so the end of tomorrow (Bangkok) is
+  // 00:00 Bangkok of the day after tomorrow = (that date) 00:00 +07:00.
+  const dayAfterTomorrow = toBangkokDateString(
+    new Date(Date.now() + 2 * 24 * 60 * 60 * 1000)
+  );
+  const dueCutoff = new Date(`${dayAfterTomorrow}T00:00:00+07:00`).toISOString();
+
+  const [{ data: activeLoans, error }, { data: historyToday }] = await Promise.all([
+    supabase
+      .from("loans")
+      .select("id, user_id, due_at")
+      .is("returned_at", null)
+      .lt("due_at", dueCutoff),
+    // One query for today's history rows instead of one lookup per loan.
+    supabase
+      .from("notification_history")
+      .select("loan_id, event_type")
+      .eq("sent_on", today),
+  ]);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  const alreadySent = new Set(
+    (historyToday ?? []).map((h) => `${h.loan_id}:${h.event_type}`)
+  );
+
   let sent = 0;
   let skippedAlreadySent = 0;
   let failed = 0;
+
+  // Work out what each loan needs, then deliver in small concurrent batches
+  // (the Notification Hub calls dominate the run time when done one by one).
+  const pending: {
+    loan: { id: string; user_id: string; due_at: string };
+    eventType: "loan.due" | "loan.overdue";
+  }[] = [];
 
   for (const loan of activeLoans ?? []) {
     const dueDate = toBangkokDateString(new Date(loan.due_at));
@@ -56,47 +86,49 @@ export async function POST(req: Request) {
 
     if (!eventType) continue; // not due soon, not due today, not yet overdue
 
-    // Check history BEFORE calling the Notification Hub, to avoid an
-    // unnecessary network call for a loan already notified today.
-    const { data: existing } = await supabase
-      .from("notification_history")
-      .select("id")
-      .eq("loan_id", loan.id)
-      .eq("event_type", eventType)
-      .eq("sent_on", today)
-      .maybeSingle();
-
-    if (existing) {
+    // Skip loans already notified today before making any network call.
+    if (alreadySent.has(`${loan.id}:${eventType}`)) {
       skippedAlreadySent++;
       continue;
     }
 
-    const delivered = await publishEvent({
-      type: eventType,
-      loan_id: loan.id,
-      user_id: loan.user_id,
-      due_at: loan.due_at,
-    });
+    pending.push({ loan, eventType });
+  }
 
-    if (!delivered) {
-      failed++;
-      continue; // no history row written -> retried on the next run
-    }
+  const CONCURRENCY = 10;
+  for (let i = 0; i < pending.length; i += CONCURRENCY) {
+    const batch = pending.slice(i, i + CONCURRENCY);
 
-    const { error: historyError } = await supabase
-      .from("notification_history")
-      .insert({ loan_id: loan.id, event_type: eventType, sent_on: today });
+    await Promise.all(
+      batch.map(async ({ loan, eventType }) => {
+        const delivered = await publishEvent({
+          type: eventType,
+          loan_id: loan.id,
+          user_id: loan.user_id,
+          due_at: loan.due_at,
+        });
 
-    // 23505 = unique_violation: another concurrent run already recorded
-    // this (loan_id, event_type, today) — the Notification Hub may have
-    // received the event twice in that narrow race, which is an accepted
-    // tradeoff of at-least-once delivery; the history table still only
-    // ever shows one row, so no THIRD run would ever re-send it.
-    if (historyError && historyError.code !== "23505") {
-      console.error("[loan-notifications] failed to record history:", historyError.message);
-    }
+        if (!delivered) {
+          failed++;
+          return; // no history row written -> retried on the next run
+        }
 
-    sent++;
+        const { error: historyError } = await supabase
+          .from("notification_history")
+          .insert({ loan_id: loan.id, event_type: eventType, sent_on: today });
+
+        // 23505 = unique_violation: another concurrent run already recorded
+        // this (loan_id, event_type, today) — the Notification Hub may have
+        // received the event twice in that narrow race, which is an accepted
+        // tradeoff of at-least-once delivery; the history table still only
+        // ever shows one row, so no THIRD run would ever re-send it.
+        if (historyError && historyError.code !== "23505") {
+          console.error("[loan-notifications] failed to record history:", historyError.message);
+        }
+
+        sent++;
+      })
+    );
   }
 
   return NextResponse.json({ sent, skipped_already_sent: skippedAlreadySent, failed });

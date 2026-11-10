@@ -27,6 +27,14 @@ export default async function CirculationDeskPage(
   const studentId = searchParams.studentId;
   const bookQuery = searchParams.bookQuery?.trim().slice(0, 200);
 
+  // Independent of the student/book search below, so start it now and await
+  // it later; it then runs in parallel with those lookups.
+  const activeLoansPromise = supabase
+    .from("loans")
+    .select("id, due_at, copies(resources(title)), users(name, email)")
+    .is("returned_at", null)
+    .order("due_at", { ascending: true });
+
   let selectedStudent: { id: string; name: string; email: string; eligibility_status: string } | null = null;
   if (studentId) {
     const { data } = await supabase
@@ -64,11 +72,7 @@ export default async function CirculationDeskPage(
     bookResults = (data ?? []) as any;
   }
 
-  const { data: activeLoans } = await supabase
-    .from("loans")
-    .select("id, due_at, copies(resources(title)), users(name, email)")
-    .is("returned_at", null)
-    .order("due_at", { ascending: true });
+  const { data: activeLoans } = await activeLoansPromise;
 
   const today = toBangkokDateString(new Date());
 

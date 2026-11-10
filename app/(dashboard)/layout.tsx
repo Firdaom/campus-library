@@ -19,13 +19,9 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { supabase, user } = await requireDashboardUser();
-
-  const { data: profile } = await supabase
-    .from("users")
-    .select("name, eligibility_status")
-    .eq("id", user.id)
-    .single();
+  // The profile (name, eligibility_status) is already loaded and cached by
+  // requireDashboardUser(), so no second `users` query is needed here.
+  const { supabase, user, profile } = await requireDashboardUser();
 
   return (
     <div className="app-shell">

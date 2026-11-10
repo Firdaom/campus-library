@@ -8,18 +8,26 @@ import { createClient } from "@/lib/supabase/server";
  * Cached per request to avoid duplicate Supabase queries.
  */
 const getCurrentUser = cache(async () => {
+
   const supabase = await createClient();
 
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data,
+    error: claimsError,
+  } = await supabase.auth.getClaims();
 
-  if (!user) redirect("/");
+  const claims = data?.claims;
+  const userId = claims?.sub;
+
+  if (claimsError || typeof userId !== "string" || !userId) {
+    redirect("/");
+  }
+
 
   const { data: profile, error } = await supabase
     .from("users")
-    .select("id, name, email, role")
-    .eq("id", user.id)
+    .select("id, name, email, role, eligibility_status")
+    .eq("id", userId)
     .single();
 
   if (
@@ -30,7 +38,14 @@ const getCurrentUser = cache(async () => {
     redirect("/auth/auth-code-error");
   }
 
-  return { supabase, user, profile };
+  return {
+    supabase,
+    user: {
+      id: userId,
+      email: typeof claims.email === "string" ? claims.email : undefined,
+    },
+    profile,
+  };
 });
 
 /**
@@ -44,7 +59,7 @@ export const requireDashboardUser = cache(async () => {
     redirect("/circulation");
   }
 
-  return { supabase, user };
+  return { supabase, user, profile };
 });
 
 /**

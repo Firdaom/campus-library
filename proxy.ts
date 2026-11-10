@@ -1,38 +1,52 @@
-import { createServerClient, type CookieOptions } from "@supabase/ssr";
+
+import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-/**
- * Refreshes the Supabase auth session on every request so Route Handlers
- * and Server Components always see a valid session (NFR-02: all write
- * operations must be authenticated).
- */
 export async function proxy(request: NextRequest) {
-  let response = NextResponse.next({ request: { headers: request.headers } });
+  let supabaseResponse = NextResponse.next({
+    request,
+  });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get(name: string) {
-          return request.cookies.get(name)?.value;
+        getAll() {
+          return request.cookies.getAll();
         },
-        set(name: string, value: string, options: CookieOptions) {
-          response = NextResponse.next({ request: { headers: request.headers } });
-          response.cookies.set({ name, value, ...options });
-        },
-        remove(name: string, options: CookieOptions) {
-          response = NextResponse.next({ request: { headers: request.headers } });
-          response.cookies.set({ name, value: "", ...options });
+        setAll(cookiesToSet, headers) {
+          // Update cookies on the incoming request.
+          cookiesToSet.forEach(({ name, value }) => {
+            request.cookies.set(name, value);
+          });
+
+          // Create a response containing the updated request.
+          supabaseResponse = NextResponse.next({
+            request,
+          });
+
+          // Send refreshed cookies to the browser.
+          cookiesToSet.forEach(({ name, value, options }) => {
+            supabaseResponse.cookies.set(name, value, options);
+          });
+
+          // Preserve cache headers provided by Supabase.
+          Object.entries(headers).forEach(([key, value]) => {
+            supabaseResponse.headers.set(key, value);
+          });
         },
       },
     }
   );
 
-  await supabase.auth.getUser();
-  return response;
+  await supabase.auth.getClaims();
+
+  return supabaseResponse;
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+  ],
 };

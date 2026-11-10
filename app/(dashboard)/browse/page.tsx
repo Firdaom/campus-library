@@ -13,18 +13,12 @@ export default async function BrowsePage(
   const searchParams = await props.searchParams;
   const { supabase } = await requireDashboardUser();
 
-  const { data: categoryRows } = await supabase
+  // Started now, awaited together with the results query below so the two
+  // round-trips run in parallel instead of back to back.
+  const categoriesPromise = supabase
     .from("resource_availability")
     .select("category")
     .order("category");
-
-  const categories = [
-    ...new Set(
-      (categoryRows ?? [])
-        .map((item) => item.category)
-        .filter((category): category is string => Boolean(category))
-    ),
-  ];
 
   const q = searchParams.q?.trim();
   const category = searchParams.category?.trim();
@@ -32,7 +26,7 @@ export default async function BrowsePage(
 
   let query = supabase
     .from("resource_availability")
-    .select("*")
+    .select("id, title, author, category, available_copies")
     .order("title")
     .limit(50);
 
@@ -58,8 +52,18 @@ export default async function BrowsePage(
     query = query.eq("category", category);
   }
 
-  const { data: resources, error } = await query;
+  const [{ data: categoryRows }, { data: resources, error }] = await Promise.all([
+    categoriesPromise,
+    query,
+  ]);
 
+  const categories = [
+    ...new Set(
+      (categoryRows ?? [])
+        .map((item) => item.category)
+        .filter((category): category is string => Boolean(category))
+    ),
+  ];
 
   return (
     <div>
