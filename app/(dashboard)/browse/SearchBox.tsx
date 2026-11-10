@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 export function SearchBox({
@@ -14,24 +14,50 @@ export function SearchBox({
   categories: string[];
 }) {
   const router = useRouter();
+
   const [q, setQ] = useState(initialQuery ?? "");
   const [category, setCategory] = useState(initialCategory ?? "");
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  useEffect(() => {
+    const normalizedQuery = q.trim();
+    const normalizedCategory = category.trim();
 
-    const params = new URLSearchParams();
+    // Avoid navigation when the URL already represents this search.
+    if (
+      normalizedQuery === (initialQuery ?? "") &&
+      normalizedCategory === (initialCategory ?? "")
+    ) {
+      return;
+    }
 
-    if (q.trim()) params.set("q", q.trim());
-    if (category) params.set("category", category);
+    const timer = setTimeout(() => {
+      const params = new URLSearchParams();
 
-    router.push(
-      `/browse${params.toString() ? `?${params.toString()}` : ""}`
-    );
-  }
+      if (normalizedQuery) {
+        params.set("q", normalizedQuery);
+      }
+
+      if (normalizedCategory) {
+        params.set("category", normalizedCategory);
+      }
+
+      const queryString = params.toString();
+
+      router.replace(
+        `/browse${queryString ? `?${queryString}` : ""}`,
+        { scroll: false }
+      );
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [q, category, initialQuery, initialCategory, router]);
 
   return (
-    <form className="search-box" onSubmit={handleSubmit} role="search">
+    <form
+      className="search-box"
+      role="search"
+      onSubmit={(e) => e.preventDefault()}
+    >
       <input
         type="search"
         placeholder="Search by title, author, category, or description..."
@@ -53,10 +79,6 @@ export function SearchBox({
           </option>
         ))}
       </select>
-
-      <button type="submit" className="btn btn-primary">
-        Search
-      </button>
     </form>
   );
 }
