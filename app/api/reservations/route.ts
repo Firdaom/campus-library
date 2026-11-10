@@ -1,19 +1,15 @@
 
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { requireRole, withApiErrors } from "@/lib/auth";
 import { createServiceClient } from "@/lib/supabase/server";
-
-const BodySchema = z.object({
-  resource_id: z.string().uuid(),
-});
+import { reservationBodySchema } from "@/lib/apiSchemas";
 
 // FR-05 / BR-02: students can reserve a resource only when
 // no available copies exist.
 export const POST = withApiErrors(async (req: Request) => {
   const { user } = await requireRole(["student"]);
 
-  const parsed = BodySchema.safeParse(
+  const parsed = reservationBodySchema.safeParse(
     await req.json().catch(() => null)
   );
 

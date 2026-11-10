@@ -1,22 +1,9 @@
 
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { requireUser, ApiError, withApiErrors } from "@/lib/auth";
 import { verifyAndStoreEligibility } from "@/lib/eligibility";
 import { createServiceClient } from "@/lib/supabase/server";
-
-const BodySchema = z
-  .object({
-    copy_id: z.string().uuid().optional(),
-    resource_id: z.string().uuid().optional(),
-    user_id: z.string().uuid().optional(),
-  })
-  .refine(
-    (data) => Boolean(data.copy_id) !== Boolean(data.resource_id),
-    {
-      message: "Provide either copy_id or resource_id, not both.",
-    }
-  );
+import { loanBodySchema } from "@/lib/apiSchemas";
 
 const LOAN_PERIOD_DAYS = Number(process.env.LOAN_PERIOD_DAYS ?? 14);
 const MAX_ACTIVE_LOANS = Number(process.env.MAX_ACTIVE_LOANS ?? 5);
@@ -25,7 +12,7 @@ export const POST = withApiErrors(async (req: Request) => {
   // 1. Authenticate the caller using their session.
   const { supabase, user, profile } = await requireUser();
 
-  const parsed = BodySchema.safeParse(await req.json().catch(() => null));
+  const parsed = loanBodySchema.safeParse(await req.json().catch(() => null));
 
   if (!parsed.success) {
     return NextResponse.json(
